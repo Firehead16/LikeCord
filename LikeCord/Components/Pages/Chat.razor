@@ -1,0 +1,41 @@
+﻿@page "/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+
+<h3>Chat</h3>
+<input @bind="message" placeholder="Enter message" />
+<button @onclick="SendMessage">Send</button>
+
+@code {
+    private HubConnection hubConnection;
+    private string message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<string>("ReceiveMessage", (message) =>
+        {
+            // Обработка полученного сообщения
+        });
+
+        hubConnection.Closed += async (error) =>
+        {
+            await Task.Delay(new Random().Next(0, 5) * 1000);
+            await hubConnection.StartAsync();
+        };
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task SendMessage()
+    {
+        if (hubConnection.State == HubConnectionState.Connected)
+        {
+            await hubConnection.SendAsync("SendMessage", message);
+            message = string.Empty; // Очистка поля ввода после отправки
+        }
+    }
+}
