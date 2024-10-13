@@ -1,5 +1,6 @@
 ﻿@page "/chat"
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging;
 @inject NavigationManager Navigation
 
 <h3>Chat</h3>
@@ -7,23 +8,32 @@
 <button @onclick="SendMessage">Send</button>
 
 @code {
-    private HubConnection hubConnection;
-    private string message;
+    private HubConnection hubConnection = default!;
+    private string message = string.Empty;
+    private string user = "test1user";
 
     protected override async Task OnInitializedAsync()
     {
         hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/chathub"))
-            .Build();
+            .WithUrl("http://localhost:5063/chatHub")
+            .ConfigureLogging(logging =>
+            {
+                logging.AddDebug();
+                logging.SetMinimumLevel(LogLevel.Debug);
+            })
+    .Build();
 
-        hubConnection.On<string>("ReceiveMessage", (message) =>
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
         {
-            // Обработка полученного сообщения
+            // Обработайте полученное сообщение
+            Console.WriteLine($"Received message from {user}: {message}");
         });
 
         hubConnection.Closed += async (error) =>
         {
-            await Task.Delay(new Random().Next(0, 5) * 1000);
+            Console.WriteLine($"Connection closed: {error?.Message}");
+            await Task.Delay(1000);
             await hubConnection.StartAsync();
         };
 
@@ -34,8 +44,14 @@
     {
         if (hubConnection.State == HubConnectionState.Connected)
         {
-            await hubConnection.SendAsync("SendMessage", message);
-            message = string.Empty; // Очистка поля ввода после отправки
+            try
+            {
+                await hubConnection.InvokeAsync("SendMessage", user, message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending message: {ex.Message}");
+            }
         }
     }
 }

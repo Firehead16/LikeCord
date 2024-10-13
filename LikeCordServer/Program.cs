@@ -1,33 +1,35 @@
-using System.Net.WebSockets;
+using LikeCordServer;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
 
-app.UseWebSockets(); // Включаем поддержку WebSocket
+// Добавляем SignalR
+builder.Services.AddSignalR();
 
-app.Map("/ws", async (HttpContext context) =>
+// Добавляем CORS
+builder.Services.AddCors(options =>
 {
-    if (context.WebSockets.IsWebSocketRequest)
+    options.AddPolicy("CorsPolicy", builder =>
     {
-        var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await Echo(context, webSocket); // Метод для обработки сообщений
-    }
-    else
-    {
-        context.Response.StatusCode = 400;
-    }
+        builder
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .SetIsOriginAllowed(origin => true); // Разрешаем все источники
+    });
 });
 
-async Task Echo(HttpContext context, WebSocket webSocket)
-{
-    var buffer = new byte[1024 * 4];
-    WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-    while (!result.CloseStatus.HasValue)
-    {
-        await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
-        result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-    }
-    await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
-}
+// Логирование
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
+var app = builder.Build();
+
+// Включаем CORS
+app.UseCors("CorsPolicy");
+
+// Маршрут для хаба SignalR
+app.MapHub<ChatHub>("/chatHub");
+
+// Запускаем приложение
 app.Run();
